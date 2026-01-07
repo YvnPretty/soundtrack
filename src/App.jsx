@@ -147,7 +147,7 @@ const MediaContainer = styled.div`
   background: rgba(0, 0, 0, 0.4);
   border-radius: 24px;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
   position: relative;
   border: 1px solid rgba(255, 255, 255, 0.03);
@@ -157,6 +157,18 @@ const MediaContainer = styled.div`
     width: 100%;
     height: 100%;
     object-fit: contain;
+    z-index: 1;
+  }
+
+  .audio-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    background: rgba(0,0,0,0.2);
+    pointer-events: none;
   }
 
   .visualizer-overlay {
@@ -172,7 +184,7 @@ const MediaContainer = styled.div`
     gap: 4px;
     pointer-events: none;
     z-index: 5;
-    opacity: ${props => props.isVideo ? 0.4 : 1};
+    opacity: ${props => props.isVideo ? 0.5 : 1};
   }
 `;
 
@@ -329,7 +341,7 @@ function App() {
         if (mediaRef.current) {
             mediaRef.current.volume = volume;
         }
-    }, [volume, currentMedia]);
+    }, [volume]);
 
     useEffect(() => {
         if (isPlaying && currentMedia) {
@@ -388,6 +400,7 @@ function App() {
     };
 
     const handleTimeUpdate = () => {
+        if (!mediaRef.current) return;
         const current = mediaRef.current.currentTime;
         const dur = mediaRef.current.duration;
         setCurrentTime(current);
@@ -433,34 +446,27 @@ function App() {
                 <MainGrid>
                     <PlayerCard>
                         <MediaContainer isVideo={currentMedia?.type === 'video'}>
-                            {currentMedia?.type === 'video' ? (
-                                <video
-                                    ref={mediaRef}
-                                    src={currentMedia.url}
-                                    onTimeUpdate={handleTimeUpdate}
-                                    onEnded={() => setCurrentIndex(prev => (prev + 1) % mediaList.length)}
-                                    crossOrigin="anonymous"
-                                />
-                            ) : (
-                                <>
-                                    <audio
-                                        ref={mediaRef}
-                                        src={currentMedia?.url}
-                                        onTimeUpdate={handleTimeUpdate}
-                                        onEnded={() => setCurrentIndex(prev => (prev + 1) % mediaList.length)}
-                                        crossOrigin="anonymous"
-                                    />
-                                    {!currentMedia && (
-                                        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', opacity: 0.2 }}>
-                                            <Music size={64} />
-                                        </div>
-                                    )}
-                                    {currentMedia && (
-                                        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
-                                            <Disc size={120} color="rgba(255,255,255,0.1)" className={isPlaying ? 'animate-spin' : ''} />
-                                        </div>
-                                    )}
-                                </>
+                            {/* Using a single video element for both audio and video to keep AudioContext stable */}
+                            <video
+                                ref={mediaRef}
+                                src={currentMedia?.url}
+                                onTimeUpdate={handleTimeUpdate}
+                                onEnded={() => setCurrentIndex(prev => (prev + 1) % mediaList.length)}
+                                crossOrigin="anonymous"
+                                playsInline
+                                style={{ display: currentMedia ? 'block' : 'none' }}
+                            />
+
+                            {!currentMedia && (
+                                <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', opacity: 0.2 }}>
+                                    <Video size={64} />
+                                </div>
+                            )}
+
+                            {currentMedia?.type === 'audio' && (
+                                <div className="audio-placeholder">
+                                    <Disc size={120} color="rgba(255,255,255,0.1)" className={isPlaying ? 'animate-spin' : ''} />
+                                </div>
                             )}
 
                             <div className="visualizer-overlay" isVideo={currentMedia?.type === 'video'}>
