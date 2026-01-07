@@ -356,27 +356,31 @@ function App() {
     }, [isPlaying, currentIndex, currentMedia]);
 
     const setupVisualizer = () => {
-        if (!audioContextRef.current) {
-            audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-            analyserRef.current = audioContextRef.current.createAnalyser();
-            sourceRef.current = audioContextRef.current.createMediaElementSource(mediaRef.current);
-            sourceRef.current.connect(analyserRef.current);
-            analyserRef.current.connect(audioContextRef.current.destination);
-            analyserRef.current.fftSize = 64;
+        try {
+            if (!audioContextRef.current) {
+                audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+                analyserRef.current = audioContextRef.current.createAnalyser();
+                sourceRef.current = audioContextRef.current.createMediaElementSource(mediaRef.current);
+                sourceRef.current.connect(analyserRef.current);
+                analyserRef.current.connect(audioContextRef.current.destination);
+                analyserRef.current.fftSize = 64;
+            }
+
+            const bufferLength = analyserRef.current.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            const updateVisualizer = () => {
+                if (!isPlaying) return;
+                analyserRef.current.getByteFrequencyData(dataArray);
+                const normalizedData = Array.from(dataArray.slice(0, 32)).map(val => (val / 255) * 100);
+                setVisualizerData(normalizedData);
+                animationFrameRef.current = requestAnimationFrame(updateVisualizer);
+            };
+
+            updateVisualizer();
+        } catch (e) {
+            console.error("Visualizer setup failed", e);
         }
-
-        const bufferLength = analyserRef.current.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
-
-        const updateVisualizer = () => {
-            if (!isPlaying) return;
-            analyserRef.current.getByteFrequencyData(dataArray);
-            const normalizedData = Array.from(dataArray.slice(0, 32)).map(val => (val / 255) * 100);
-            setVisualizerData(normalizedData);
-            animationFrameRef.current = requestAnimationFrame(updateVisualizer);
-        };
-
-        updateVisualizer();
     };
 
     const handleFileUpload = (e) => {
@@ -446,7 +450,6 @@ function App() {
                 <MainGrid>
                     <PlayerCard>
                         <MediaContainer isVideo={currentMedia?.type === 'video'}>
-                            {/* Using a single video element for both audio and video to keep AudioContext stable */}
                             <video
                                 ref={mediaRef}
                                 src={currentMedia?.url}
