@@ -3,7 +3,8 @@ import styled, { keyframes, createGlobalStyle } from 'styled-components';
 import {
     Play, Pause, SkipBack, SkipForward,
     Volume2, VolumeX, Music, Plus,
-    Trash2, ListMusic, Disc, Heart
+    Trash2, ListMusic, Disc, Heart,
+    Video, Maximize2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -48,11 +49,6 @@ const GlobalStyle = createGlobalStyle`
     background: rgba(255, 255, 255, 0.1);
     border-radius: 10px;
   }
-`;
-
-const spin = keyframes`
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
 `;
 
 const Container = styled.div`
@@ -138,28 +134,17 @@ const PlayerCard = styled.div`
   border: 1px solid rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(20px);
   border-radius: 32px;
-  padding: 2.5rem;
+  padding: 2rem;
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1.5rem;
   position: relative;
   overflow: hidden;
-
-  &::before {
-    content: '';
-    position: absolute;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background: radial-gradient(circle at center, rgba(99, 102, 241, 0.05) 0%, transparent 50%);
-    pointer-events: none;
-  }
 `;
 
-const VisualizerContainer = styled.div`
+const MediaContainer = styled.div`
   aspect-ratio: 16/9;
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.4);
   border-radius: 24px;
   display: flex;
   align-items: flex-end;
@@ -167,8 +152,28 @@ const VisualizerContainer = styled.div`
   position: relative;
   border: 1px solid rgba(255, 255, 255, 0.03);
   overflow: hidden;
-  padding: 0 1rem;
-  gap: 4px;
+  
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .visualizer-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 40%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0 1rem;
+    gap: 4px;
+    pointer-events: none;
+    z-index: 5;
+    opacity: ${props => props.isVideo ? 0.4 : 1};
+  }
 `;
 
 const VisualizerBar = styled.div`
@@ -184,7 +189,7 @@ const VisualizerBar = styled.div`
 const Controls = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.2rem;
 `;
 
 const ProgressBar = styled.input`
@@ -210,11 +215,11 @@ const ControlButtons = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 2.5rem;
+  gap: 2rem;
 
   .play-pause {
-    width: 64px;
-    height: 64px;
+    width: 56px;
+    height: 56px;
     border-radius: 50%;
     background: #6366f1;
     display: flex;
@@ -257,11 +262,11 @@ const PlaylistCard = styled.div`
   max-height: 700px;
 `;
 
-const SongItem = styled(motion.div)`
+const MediaItem = styled(motion.div)`
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 1rem;
+  padding: 0.8rem;
   border-radius: 16px;
   cursor: pointer;
   background: ${props => props.active ? 'rgba(99, 102, 241, 0.1)' : 'transparent'};
@@ -272,11 +277,22 @@ const SongItem = styled(motion.div)`
     background: rgba(255, 255, 255, 0.05);
   }
 
-  .song-info {
+  .icon-type {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: ${props => props.isVideo ? 'rgba(244, 63, 94, 0.1)' : 'rgba(99, 102, 241, 0.1)'};
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: ${props => props.isVideo ? '#f43f5e' : '#818cf8'};
+  }
+
+  .info {
     flex: 1;
     min-width: 0;
     h4 {
-      font-size: 0.95rem;
+      font-size: 0.9rem;
       font-weight: 600;
       white-space: nowrap;
       overflow: hidden;
@@ -284,15 +300,15 @@ const SongItem = styled(motion.div)`
       color: ${props => props.active ? '#818cf8' : 'white'};
     }
     p {
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       color: rgba(255, 255, 255, 0.4);
     }
   }
 `;
 
 function App() {
-    const [songs, setSongs] = useState([]);
-    const [currentSongIndex, setCurrentSongIndex] = useState(null);
+    const [mediaList, setMediaList] = useState([]);
+    const [currentIndex, setCurrentIndex] = useState(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [progress, setProgress] = useState(0);
     const [volume, setVolume] = useState(0.7);
@@ -300,38 +316,38 @@ function App() {
     const [duration, setDuration] = useState(0);
     const [visualizerData, setVisualizerData] = useState(new Array(32).fill(0));
 
-    const audioRef = useRef(null);
+    const mediaRef = useRef(null);
     const fileInputRef = useRef(null);
     const audioContextRef = useRef(null);
     const analyserRef = useRef(null);
     const sourceRef = useRef(null);
     const animationFrameRef = useRef(null);
 
-    const currentSong = currentSongIndex !== null ? songs[currentSongIndex] : null;
+    const currentMedia = currentIndex !== null ? mediaList[currentIndex] : null;
 
     useEffect(() => {
-        if (audioRef.current) {
-            audioRef.current.volume = volume;
+        if (mediaRef.current) {
+            mediaRef.current.volume = volume;
         }
-    }, [volume]);
+    }, [volume, currentMedia]);
 
     useEffect(() => {
-        if (isPlaying && currentSong) {
-            audioRef.current.play().catch(e => console.log("Playback failed", e));
+        if (isPlaying && currentMedia) {
+            mediaRef.current.play().catch(e => console.log("Playback failed", e));
             setupVisualizer();
-        } else if (audioRef.current) {
-            audioRef.current.pause();
+        } else if (mediaRef.current) {
+            mediaRef.current.pause();
             if (animationFrameRef.current) {
                 cancelAnimationFrame(animationFrameRef.current);
             }
         }
-    }, [isPlaying, currentSongIndex]);
+    }, [isPlaying, currentIndex, currentMedia]);
 
     const setupVisualizer = () => {
         if (!audioContextRef.current) {
             audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
             analyserRef.current = audioContextRef.current.createAnalyser();
-            sourceRef.current = audioContextRef.current.createMediaElementSource(audioRef.current);
+            sourceRef.current = audioContextRef.current.createMediaElementSource(mediaRef.current);
             sourceRef.current.connect(analyserRef.current);
             analyserRef.current.connect(audioContextRef.current.destination);
             analyserRef.current.fftSize = 64;
@@ -353,17 +369,18 @@ function App() {
 
     const handleFileUpload = (e) => {
         const files = Array.from(e.target.files);
-        const newSongs = files.map(file => ({
+        const newMedia = files.map(file => ({
             id: Math.random().toString(36).substr(2, 9),
             name: file.name.replace(/\.[^/.]+$/, ""),
-            url: URL.createObjectURL(file)
+            url: URL.createObjectURL(file),
+            type: file.type.startsWith('video') ? 'video' : 'audio'
         }));
-        setSongs(prev => [...prev, ...newSongs]);
-        if (currentSongIndex === null) setCurrentSongIndex(0);
+        setMediaList(prev => [...prev, ...newMedia]);
+        if (currentIndex === null) setCurrentIndex(0);
     };
 
     const togglePlay = () => {
-        if (songs.length === 0) return;
+        if (mediaList.length === 0) return;
         if (audioContextRef.current?.state === 'suspended') {
             audioContextRef.current.resume();
         }
@@ -371,8 +388,8 @@ function App() {
     };
 
     const handleTimeUpdate = () => {
-        const current = audioRef.current.currentTime;
-        const dur = audioRef.current.duration;
+        const current = mediaRef.current.currentTime;
+        const dur = mediaRef.current.duration;
         setCurrentTime(current);
         setDuration(dur || 0);
         setProgress((current / dur) * 100 || 0);
@@ -391,7 +408,7 @@ function App() {
                 <Header>
                     <Logo>
                         <div className="icon-box">
-                            <Music size={24} />
+                            <Video size={24} />
                         </div>
                         <h1>WAVES</h1>
                     </Logo>
@@ -401,42 +418,69 @@ function App() {
                         onClick={() => fileInputRef.current.click()}
                     >
                         <Plus size={20} />
-                        Agregar Música
+                        Agregar Media
                     </GlassButton>
                     <input
                         type="file"
                         ref={fileInputRef}
                         onChange={handleFileUpload}
                         multiple
-                        accept="audio/*"
+                        accept="audio/*,video/*"
                         style={{ display: 'none' }}
                     />
                 </Header>
 
                 <MainGrid>
                     <PlayerCard>
-                        <VisualizerContainer>
-                            {visualizerData.map((height, i) => (
-                                <VisualizerBar key={i} style={{ height: `${Math.max(5, height)}%` }} />
-                            ))}
-                            {!currentSong && (
-                                <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', opacity: 0.2 }}>
-                                    <Music size={64} />
-                                </div>
+                        <MediaContainer isVideo={currentMedia?.type === 'video'}>
+                            {currentMedia?.type === 'video' ? (
+                                <video
+                                    ref={mediaRef}
+                                    src={currentMedia.url}
+                                    onTimeUpdate={handleTimeUpdate}
+                                    onEnded={() => setCurrentIndex(prev => (prev + 1) % mediaList.length)}
+                                    crossOrigin="anonymous"
+                                />
+                            ) : (
+                                <>
+                                    <audio
+                                        ref={mediaRef}
+                                        src={currentMedia?.url}
+                                        onTimeUpdate={handleTimeUpdate}
+                                        onEnded={() => setCurrentIndex(prev => (prev + 1) % mediaList.length)}
+                                        crossOrigin="anonymous"
+                                    />
+                                    {!currentMedia && (
+                                        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', opacity: 0.2 }}>
+                                            <Music size={64} />
+                                        </div>
+                                    )}
+                                    {currentMedia && (
+                                        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
+                                            <Disc size={120} color="rgba(255,255,255,0.1)" className={isPlaying ? 'animate-spin' : ''} />
+                                        </div>
+                                    )}
+                                </>
                             )}
-                        </VisualizerContainer>
+
+                            <div className="visualizer-overlay" isVideo={currentMedia?.type === 'video'}>
+                                {visualizerData.map((height, i) => (
+                                    <VisualizerBar key={i} style={{ height: `${Math.max(5, height)}%` }} />
+                                ))}
+                            </div>
+                        </MediaContainer>
 
                         <div style={{ textAlign: 'center' }}>
-                            <h2 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>
-                                {currentSong?.name || "No hay canción"}
+                            <h2 style={{ fontSize: '1.4rem', marginBottom: '0.4rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {currentMedia?.name || "No hay archivo"}
                             </h2>
-                            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.9rem' }}>
-                                {currentSong ? "Reproduciendo ahora" : "Selecciona una canción para comenzar"}
+                            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>
+                                {currentMedia ? `Reproduciendo ${currentMedia.type}` : "Selecciona un archivo para comenzar"}
                             </p>
                         </div>
 
                         <Controls>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)' }}>
                                 <span>{formatTime(currentTime)}</span>
                                 <span>{formatTime(duration)}</span>
                             </div>
@@ -446,25 +490,25 @@ function App() {
                                 max="100"
                                 value={progress}
                                 onChange={(e) => {
-                                    const newTime = (e.target.value / 100) * audioRef.current.duration;
-                                    audioRef.current.currentTime = newTime;
+                                    const newTime = (e.target.value / 100) * mediaRef.current.duration;
+                                    mediaRef.current.currentTime = newTime;
                                 }}
                             />
                             <ControlButtons>
-                                <button className="nav-btn" onClick={() => setCurrentSongIndex(prev => (prev - 1 + songs.length) % songs.length)}>
-                                    <SkipBack size={32} fill="currentColor" />
+                                <button className="nav-btn" onClick={() => setCurrentIndex(prev => (prev - 1 + mediaList.length) % mediaList.length)}>
+                                    <SkipBack size={28} fill="currentColor" />
                                 </button>
                                 <button className="play-pause" onClick={togglePlay}>
-                                    {isPlaying ? <Pause size={32} fill="currentColor" /> : <Play size={32} fill="currentColor" style={{ marginLeft: '4px' }} />}
+                                    {isPlaying ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" style={{ marginLeft: '4px' }} />}
                                 </button>
-                                <button className="nav-btn" onClick={() => setCurrentSongIndex(prev => (prev + 1) % songs.length)}>
-                                    <SkipForward size={32} fill="currentColor" />
+                                <button className="nav-btn" onClick={() => setCurrentIndex(prev => (prev + 1) % mediaList.length)}>
+                                    <SkipForward size={28} fill="currentColor" />
                                 </button>
                             </ControlButtons>
                         </Controls>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', justifyContent: 'center' }}>
-                            <Volume2 size={18} color="rgba(255,255,255,0.4)" />
+                            <Volume2 size={16} color="rgba(255,255,255,0.4)" />
                             <input
                                 type="range"
                                 min="0"
@@ -480,57 +524,64 @@ function App() {
                     <PlaylistCard>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
                             <ListMusic size={20} color="#818cf8" />
-                            <h3 style={{ fontSize: '1.2rem' }}>Tu Lista</h3>
+                            <h3 style={{ fontSize: '1.2rem' }}>Tu Biblioteca</h3>
                         </div>
                         <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                            {songs.length === 0 ? (
+                            {mediaList.length === 0 ? (
                                 <div style={{ textAlign: 'center', padding: '3rem', color: 'rgba(255,255,255,0.2)' }}>
-                                    <Disc size={48} style={{ marginBottom: '1rem' }} />
-                                    <p>Lista vacía</p>
+                                    <Video size={48} style={{ marginBottom: '1rem' }} />
+                                    <p>Biblioteca vacía</p>
                                 </div>
                             ) : (
-                                songs.map((song, index) => (
-                                    <SongItem
-                                        key={song.id}
-                                        active={currentSongIndex === index}
+                                mediaList.map((item, index) => (
+                                    <MediaItem
+                                        key={item.id}
+                                        active={currentIndex === index}
+                                        isVideo={item.type === 'video'}
                                         onClick={() => {
-                                            setCurrentSongIndex(index);
+                                            setCurrentIndex(index);
                                             setIsPlaying(true);
                                         }}
                                     >
-                                        <div className="song-info">
-                                            <h4>{song.name}</h4>
-                                            <p>Archivo local</p>
+                                        <div className="icon-type">
+                                            {item.type === 'video' ? <Video size={18} /> : <Music size={18} />}
+                                        </div>
+                                        <div className="info">
+                                            <h4>{item.name}</h4>
+                                            <p>{item.type === 'video' ? 'Video local' : 'Audio local'}</p>
                                         </div>
                                         <Trash2
-                                            size={16}
+                                            size={14}
                                             color="rgba(255,255,255,0.2)"
                                             style={{ cursor: 'pointer' }}
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                const newSongs = songs.filter(s => s.id !== song.id);
-                                                setSongs(newSongs);
-                                                if (index === currentSongIndex) {
+                                                const newList = mediaList.filter(m => m.id !== item.id);
+                                                setMediaList(newList);
+                                                if (index === currentIndex) {
                                                     setIsPlaying(false);
-                                                    setCurrentSongIndex(newSongs.length > 0 ? 0 : null);
+                                                    setCurrentIndex(newList.length > 0 ? 0 : null);
                                                 }
                                             }}
                                         />
-                                    </SongItem>
+                                    </MediaItem>
                                 ))
                             )}
                         </div>
                     </PlaylistCard>
                 </MainGrid>
-
-                <audio
-                    ref={audioRef}
-                    src={currentSong?.url}
-                    onTimeUpdate={handleTimeUpdate}
-                    onEnded={() => setCurrentSongIndex(prev => (prev + 1) % songs.length)}
-                    crossOrigin="anonymous"
-                />
             </Container>
+
+            <style dangerouslySetInnerHTML={{
+                __html: `
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .animate-spin {
+          animation: spin 10s linear infinite;
+        }
+      `}} />
         </>
     );
 }
