@@ -157,39 +157,28 @@ const PlayerCard = styled.div`
   }
 `;
 
-const Visualizer = styled.div`
+const VisualizerContainer = styled.div`
   aspect-ratio: 16/9;
   background: rgba(0, 0, 0, 0.2);
   border-radius: 24px;
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
   position: relative;
   border: 1px solid rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+  padding: 0 1rem;
+  gap: 4px;
+`;
 
-  .disc-container {
-    width: 200px;
-    height: 200px;
-    border-radius: 50%;
-    background: conic-gradient(from 0deg, #1e293b, #0f172a, #1e293b);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-    animation: ${props => props.isPlaying ? spin : 'none'} 10s linear infinite;
-
-    &::after {
-      content: '';
-      position: absolute;
-      width: 40px;
-      height: 40px;
-      background: #020617;
-      border-radius: 50%;
-      border: 4px solid rgba(255,255,255,0.05);
-    }
-  }
+const VisualizerBar = styled.div`
+  flex: 1;
+  background: linear-gradient(to top, #6366f1, #f43f5e, #fbbf24);
+  border-radius: 4px 4px 0 0;
+  transition: height 0.05s ease;
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.6);
+  opacity: 0.9;
+  filter: brightness(1.2);
 `;
 
 const Controls = styled.div`
@@ -309,9 +298,14 @@ function App() {
     const [volume, setVolume] = useState(0.7);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
+    const [visualizerData, setVisualizerData] = useState(new Array(32).fill(0));
 
     const audioRef = useRef(null);
     const fileInputRef = useRef(null);
+    const audioContextRef = useRef(null);
+    const analyserRef = useRef(null);
+    const sourceRef = useRef(null);
+    const animationFrameRef = useRef(null);
 
     const currentSong = currentSongIndex !== null ? songs[currentSongIndex] : null;
 
@@ -324,10 +318,38 @@ function App() {
     useEffect(() => {
         if (isPlaying && currentSong) {
             audioRef.current.play().catch(e => console.log("Playback failed", e));
+            setupVisualizer();
         } else if (audioRef.current) {
             audioRef.current.pause();
+            if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
+            }
         }
     }, [isPlaying, currentSongIndex]);
+
+    const setupVisualizer = () => {
+        if (!audioContextRef.current) {
+            audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+            analyserRef.current = audioContextRef.current.createAnalyser();
+            sourceRef.current = audioContextRef.current.createMediaElementSource(audioRef.current);
+            sourceRef.current.connect(analyserRef.current);
+            analyserRef.current.connect(audioContextRef.current.destination);
+            analyserRef.current.fftSize = 64;
+        }
+
+        const bufferLength = analyserRef.current.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+
+        const updateVisualizer = () => {
+            if (!isPlaying) return;
+            analyserRef.current.getByteFrequencyData(dataArray);
+            const normalizedData = Array.from(dataArray.slice(0, 32)).map(val => (val / 255) * 100);
+            setVisualizerData(normalizedData);
+            animationFrameRef.current = requestAnimationFrame(updateVisualizer);
+        };
+
+        updateVisualizer();
+    };
 
     const handleFileUpload = (e) => {
         const files = Array.from(e.target.files);
@@ -342,6 +364,9 @@ function App() {
 
     const togglePlay = () => {
         if (songs.length === 0) return;
+        if (audioContextRef.current?.state === 'suspended') {
+            audioContextRef.current.resume();
+        }
         setIsPlaying(!isPlaying);
     };
 
@@ -390,15 +415,16 @@ function App() {
 
                 <MainGrid>
                     <PlayerCard>
-                        <Visualizer isPlaying={isPlaying}>
-                            {currentSong ? (
-                                <div className="disc-container">
-                                    <Disc size={100} color="rgba(255,255,255,0.1)" />
+                        <VisualizerContainer>
+                            {visualizerData.map((height, i) => (
+                                <VisualizerBar key={i} style={{ height: `${Math.max(5, height)}%` }} />
+                            ))}
+                            {!currentSong && (
+                                <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', opacity: 0.2 }}>
+                                    <Music size={64} />
                                 </div>
-                            ) : (
-                                <Music size={64} color="rgba(255,255,255,0.1)" />
                             )}
-                        </Visualizer>
+                        </VisualizerContainer>
 
                         <div style={{ textAlign: 'center' }}>
                             <h2 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>
@@ -502,6 +528,7 @@ function App() {
                     src={currentSong?.url}
                     onTimeUpdate={handleTimeUpdate}
                     onEnded={() => setCurrentSongIndex(prev => (prev + 1) % songs.length)}
+                    crossOrigin="anonymous"
                 />
             </Container>
         </>
